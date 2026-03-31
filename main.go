@@ -128,7 +128,6 @@ func main() {
 	m.HandleFunc("/profiles/{id}", proh.GetProfile).Methods("GET")
 	m.HandleFunc("/profiles/update", proh.UpdateProfile).Methods("POST")
 	m.HandleFunc("/profiles/heartbeat", proh.UpdateLastActive).Methods("POST")
-
 	m.HandleFunc("/profiles/updateFeedback", proh.UpdateFeedback).Methods("PUT")
 	m.HandleFunc("/profiles/GetFeedback/{id}", proh.GetFeedback).Methods("GET")
 
