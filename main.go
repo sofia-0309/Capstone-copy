@@ -128,10 +128,10 @@ func main() {
 	m.HandleFunc("/profiles/{id}", proh.GetProfile).Methods("GET")
 	m.HandleFunc("/profiles/update", proh.UpdateProfile).Methods("POST")
 	m.HandleFunc("/profiles/heartbeat", proh.UpdateLastActive).Methods("POST")
-<<<<<<< HEAD
+
 	m.HandleFunc("/profiles/updateFeedback", proh.UpdateFeedback).Methods("PUT")
 	m.HandleFunc("/profiles/GetFeedback/{id}", proh.GetFeedback).Methods("GET")
-=======
+
 	m.HandleFunc("/profiles/updateFeedback",proh.UpdateFeedback).Methods("PUT")
 	m.HandleFunc("/profiles/GetFeedback/{id}",proh.GetFeedback).Methods("GET")
 	m.HandleFunc("/profiles/AddRating",proh.SaveRatings).Methods("POST")
@@ -144,7 +144,6 @@ func main() {
 	
 	
 
->>>>>>> 5916833 ( Improved feedback for AI response, saved ratings into database with the tags and pulled student stats)
 
 	// Patients form
 	//m.HandleFunc("/patients/getPatients",ph.GetPatients).Methods("GET")
