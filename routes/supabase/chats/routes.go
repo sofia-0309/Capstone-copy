@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	supabase "github.com/nedpals/supabase-go"
 )
@@ -44,6 +45,8 @@ type chatMessage struct {
 	ChatID       int64      `json:"chat_id"`
 	SenderUserID string     `json:"sender_user_id"`
 	Content      string     `json:"content"`
+	TaskID       *uuid.UUID `json:"task_id,omitempty"`
+	PatientID    *uuid.UUID `json:"patient_id,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	ReadAt       *time.Time `json:"read_at"`
 }
@@ -54,6 +57,7 @@ type sendInviteRequest struct {
 
 type sendMessageRequest struct {
 	Content string `json:"content"`
+	TaskID  string `json:"task_id,omitempty"`
 }
 
 type chatListItem struct {
@@ -163,6 +167,62 @@ func (h *ChatHandler) getChatByPair(userA, userB string) (*chatRoom, error) {
 	}
 
 	return nil, nil
+}
+
+func (h *ChatHandler) getUserUUIDBySixDigitUserID(userID string) (*uuid.UUID, error) {
+	var users []struct {
+		ID uuid.UUID `json:"id"`
+	}
+	err := h.Supabase.DB.From("users").
+		Select("id").
+		Eq("userId", userID).
+		Execute(&users)
+	if err != nil {
+		return nil, err
+	}
+	if len(users) == 0 {
+		return nil, nil
+	}
+	return &users[0].ID, nil
+}
+
+func (h *ChatHandler) getValidatedPatientQuestionAttachment(taskID string, senderSixDigitID string) (*uuid.UUID, *uuid.UUID, error) {
+	parsedTaskID, err := uuid.Parse(strings.TrimSpace(taskID))
+	if err != nil {
+		return nil, nil, errors.New("invalid task_id")
+	}
+
+	senderUUID, err := h.getUserUUIDBySixDigitUserID(senderSixDigitID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if senderUUID == nil {
+		return nil, nil, errors.New("sender not found")
+	}
+
+	var tasks []struct {
+		ID        uuid.UUID  `json:"id"`
+		UserID    uuid.UUID  `json:"user_id"`
+		TaskType  string     `json:"task_type"`
+		PatientID *uuid.UUID `json:"patient_id"`
+	}
+	err = h.Supabase.DB.From("tasks").
+		Select("id,user_id,task_type,patient_id").
+		Eq("id", parsedTaskID.String()).
+		Eq("user_id", senderUUID.String()).
+		Eq("task_type", "patient_question").
+		Execute(&tasks)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(tasks) == 0 {
+		return nil, nil, errors.New("task_id is not an attachable patient_question task")
+	}
+	if tasks[0].PatientID == nil {
+		return nil, nil, errors.New("task has no patient_id")
+	}
+
+	return &tasks[0].ID, tasks[0].PatientID, nil
 }
 
 func (h *ChatHandler) SendInvite(w http.ResponseWriter, r *http.Request) {
@@ -579,12 +639,31 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	attachmentTaskID := strings.TrimSpace(req.TaskID)
+	var attachedTaskID *uuid.UUID
+	var attachedPatientID *uuid.UUID
+	if attachmentTaskID != "" {
+		validTaskID, validPatientID, validateErr := h.getValidatedPatientQuestionAttachment(attachmentTaskID, userID)
+		if validateErr != nil {
+			http.Error(w, validateErr.Error(), http.StatusForbidden)
+			return
+		}
+		attachedTaskID = validTaskID
+		attachedPatientID = validPatientID
+	}
+
 	now := time.Now()
 	insertData := map[string]interface{}{
-		"chat_id":         chat.ID,
-		"sender_user_id":  userID,
-		"content":         content,
-		"created_at":      now,
+		"chat_id":        chat.ID,
+		"sender_user_id": userID,
+		"content":        content,
+		"created_at":     now,
+	}
+	if attachedTaskID != nil {
+		insertData["task_id"] = attachedTaskID.String()
+	}
+	if attachedPatientID != nil {
+		insertData["patient_id"] = attachedPatientID.String()
 	}
 	if err := h.Supabase.DB.From("chat_messages").Insert(insertData).Execute(nil); err != nil {
 		http.Error(w, "failed to send message", http.StatusInternalServerError)
@@ -603,6 +682,8 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 			"sender_user_id": userID,
 			"content":        content,
 			"created_at":     now,
+			"task_id":        attachedTaskID,
+			"patient_id":     attachedPatientID,
 		},
 	})
 	chatRealtimeHub.emitToUsers([]string{chat.UserAID, chat.UserBID}, wsEvent{
@@ -615,5 +696,7 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		"sender_user_id": userID,
 		"content":        content,
 		"created_at":     now,
+		"task_id":        attachedTaskID,
+		"patient_id":     attachedPatientID,
 	})
 }

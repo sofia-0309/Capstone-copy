@@ -9,7 +9,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/cors"
-
 	"gitlab.msu.edu/team-corewell-2025/routes/llm"
 	reports "gitlab.msu.edu/team-corewell-2025/routes/reports"
 	"gitlab.msu.edu/team-corewell-2025/routes/supabase"
@@ -23,15 +22,17 @@ import (
 	questionboard "gitlab.msu.edu/team-corewell-2025/routes/supabase/questionboard"
 	questions "gitlab.msu.edu/team-corewell-2025/routes/supabase/questions"
 	quizzes "gitlab.msu.edu/team-corewell-2025/routes/supabase/quizzes"
+	ratings "gitlab.msu.edu/team-corewell-2025/routes/supabase/ratings"
 	results "gitlab.msu.edu/team-corewell-2025/routes/supabase/results"
+	scheduler "gitlab.msu.edu/team-corewell-2025/routes/supabase/scheduler"
 	staff "gitlab.msu.edu/team-corewell-2025/routes/supabase/staff"
 	staffTasks "gitlab.msu.edu/team-corewell-2025/routes/supabase/staff_tasks"
 	tasks "gitlab.msu.edu/team-corewell-2025/routes/supabase/tasks"
 	tickets "gitlab.msu.edu/team-corewell-2025/routes/supabase/tickets"
+	visits "gitlab.msu.edu/team-corewell-2025/routes/supabase/visits"
 )
 
 func main() {
-
 	// Load env vars
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -64,8 +65,11 @@ func main() {
 	var conv conversations.ConversationService = &conversations.ConversationHandler{Supabase: supa}
 	var chat chats.ChatService = &chats.ChatHandler{Supabase: supa}
 	var rep reports.ReportService = &reports.ReportHandler{}
+	var sch scheduler.SchedulerService = &scheduler.SchedulerHandler{Supabase: supa}
+	var rat ratings.RatingService = &ratings.RatingHandler{Supabase: supa}
+	var vis visits.VisitService = &visits.VisitHandler{Supabase: supa}
 
-	// // API Gateway
+	// API Gateway
 	m := mux.NewRouter()
 
 	topics := []string{
@@ -90,12 +94,6 @@ func main() {
 		"Social Sciences - Medical ethics and jurisprudence",
 		"Social Sciences - Systems-based practice and patient safety",
 	}
-	// err = qh.GenerateQuestions(topics)
-	// 	if err != nil {
-	// 		fmt.Println("Error from Flask:", err)
-	// 	} else {
-	// 		fmt.Println("Successfully called Flask and received response.")
-	// 	}
 
 	c := cron.New(cron.WithSeconds())
 	_, err = c.AddFunc("@daily", func() {
@@ -113,36 +111,31 @@ func main() {
 		fmt.Println("Error scheduling cron job:", err)
 		return
 	}
+
 	c.Start()
 
-	// Auth  aaaa
+	// Auth
 	m.HandleFunc("/addUser", supabase.SignUpUser).Methods("POST")
 	m.HandleFunc("/login", supabase.SignInUser).Methods("POST")
 	m.HandleFunc("/forgotPassword", supabase.ForgotPassword).Methods("POST")
 	m.HandleFunc("/resetPassword", supabase.ResetPassword).Methods("POST")
 
 	//Profile
-	m.HandleFunc("/profiles/GetTagsStats/{user_id}",proh.GetTagsStats).Methods("GET")
-	m.HandleFunc("/profiles/GetTags/{user_id}",proh.GetLeastTags).Methods("GET")
-	m.HandleFunc("/profiles/GetAllRatings",proh.GetAllRatings).Methods("GET")
+	m.HandleFunc("/profiles/GetTagsStats/{user_id}", proh.GetTagsStats).Methods("GET")
+	m.HandleFunc("/profiles/GetTags/{user_id}", proh.GetLeastTags).Methods("GET")
+	m.HandleFunc("/profiles/GetAllRatings", proh.GetAllRatings).Methods("GET")
 	m.HandleFunc("/profiles/{id}", proh.GetProfile).Methods("GET")
 	m.HandleFunc("/profiles/update", proh.UpdateProfile).Methods("POST")
 	m.HandleFunc("/profiles/heartbeat", proh.UpdateLastActive).Methods("POST")
 	m.HandleFunc("/profiles/updateFeedback", proh.UpdateFeedback).Methods("PUT")
 	m.HandleFunc("/profiles/GetFeedback/{id}", proh.GetFeedback).Methods("GET")
 
-	m.HandleFunc("/profiles/updateFeedback",proh.UpdateFeedback).Methods("PUT")
-	m.HandleFunc("/profiles/GetFeedback/{id}",proh.GetFeedback).Methods("GET")
-	m.HandleFunc("/profiles/AddRating",proh.SaveRatings).Methods("POST")
-	
-	
-	m.HandleFunc("/profiles/GetRatings/{user_id}",proh.GetRatings).Methods("GET")
-	m.HandleFunc("/profiles/GetRatings/{user_id}/{type}",proh.GetRatingsByType).Methods("GET")
-	
+	m.HandleFunc("/profiles/updateFeedback", proh.UpdateFeedback).Methods("PUT")
+	m.HandleFunc("/profiles/GetFeedback/{id}", proh.GetFeedback).Methods("GET")
+	m.HandleFunc("/profiles/AddRating", proh.SaveRatings).Methods("POST")
 
-	
-	
-
+	m.HandleFunc("/profiles/GetRatings/{user_id}", proh.GetRatings).Methods("GET")
+	m.HandleFunc("/profiles/GetRatings/{user_id}/{type}", proh.GetRatingsByType).Methods("GET")
 
 	// Patients form
 	//m.HandleFunc("/patients/getPatients",ph.GetPatients).Methods("GET")
@@ -164,12 +157,16 @@ func main() {
 	patientsRouter.HandleFunc("/getBulkMessages", ph.GetMultiplePatientsByID).Methods("POST")
 	patientsRouter.HandleFunc("/{id}/dermnet_image", llm.GetPatientImage).Methods("GET")
 	patientsRouter.HandleFunc("/{id}/profile_picture", llm.GetPatientProfilePicture).Methods("GET")
+	patientsRouter.HandleFunc("/{patient_id}/visits", vis.GetPatientVisits).Methods("GET")
+	patientsRouter.HandleFunc("/{patient_id}/visits", vis.CreatePatientVisit).Methods("POST")
 
 	// Adding featured patients
 	m.HandleFunc("/patients/addPatient", ph.AddNewPatient).Methods("POST")
 
 	// Staff
 	m.HandleFunc("/staff", sh.GetAllStaff).Methods("GET", "OPTIONS")
+	m.HandleFunc("/staff/{id}", sh.GetStaffByID).Methods("GET", "OPTIONS")
+	m.HandleFunc("/staff/generate", llm.PostGenerateStaffMessages).Methods("POST")
 
 	// Flagging FeaturE
 	// LLM
@@ -192,6 +189,8 @@ func main() {
 	ordersRouter := m.PathPrefix("/orders").Subrouter()
 	ordersRouter.HandleFunc("/get", ord.GetOrders).Methods("GET")
 	ordersRouter.HandleFunc("/getOrdered", ord.GetOrderedOrders).Methods("GET")
+	ordersRouter.HandleFunc("/feedback", ord.GetOrdersFeedback).Methods("GET")
+	ordersRouter.HandleFunc("/savedFeedback", ord.GetSavedOrdersFeedback).Methods("GET")
 	ordersRouter.HandleFunc("/{task_id}", ord.LogOrder).Methods("POST")
 
 	// Orders_List
@@ -203,6 +202,10 @@ func main() {
 
 	// Progress Report
 	m.HandleFunc("/reports/progress", rep.GenerateProgressReport).Methods("POST")
+
+	
+	// Scheduler
+	m.HandleFunc("/scheduler/visit", sch.CreateVisit).Methods("POST", "OPTIONS")
 
 	// Leaderboard
 	m.HandleFunc("/students/leaderboard", supabase.GetLeaderboard).Methods("GET")
@@ -236,10 +239,9 @@ func main() {
 
 	// Endpoints for tasks (generating, getting, completing, etc.)
 	m.HandleFunc("/generateTasks", th.GenerateTasksHTMLWrapper).Methods("POST")
-	m.HandleFunc("/{student_id}/tasks", th.GetTasksByStudentID).Methods("POST", "OPTIONS") //had to make this post bc the function expects a body
+	m.HandleFunc("/{student_id}/tasks", th.GetTasksByStudentID).Methods("POST", "OPTIONS")
 	m.HandleFunc("/students/{student_id}/generate-initial-tasks", th.GenerateInitialTasksHandler).Methods("POST")
 	m.HandleFunc("/generateNewTasks", th.GenerateNewTasks).Methods("POST")
-	//hardcoded body to show incomplete tasks ^^^
 	m.HandleFunc("/{student_id}/tasks/week", th.GetTasksByWeekAndDay).Methods("GET")
 	m.HandleFunc("/{student_id}/tasks/{task_id}", th.GetTaskByID).Methods("GET")
 	m.HandleFunc("/{student_id}/tasks/{task_id}/completeTask", th.CompleteTask).Methods("POST")
@@ -296,6 +298,11 @@ func main() {
 	chatsRouter.HandleFunc("/invites/{id}/decline", chat.DeclineInvite).Methods("POST")
 	chatsRouter.HandleFunc("/{chat_id}/messages", chat.GetChatMessages).Methods("GET")
 	chatsRouter.HandleFunc("/{chat_id}/messages", chat.SendMessage).Methods("POST")
+	// Ratings endpoints
+	m.HandleFunc("/ratings/submit", rat.SubmitRating).Methods("POST")
+	m.HandleFunc("/ratings/{user_id}", rat.GetUserRatings).Methods("GET")
+	// Instructor ratings analytics
+	//m.HandleFunc("/ratings/instructor/{instructor_id}", rat.GetInstructorRatings).Methods("GET")
 
 	// Allow API requests from frontend
 	allowedOrigins := []string{"http://localhost:3000"}

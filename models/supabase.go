@@ -118,6 +118,7 @@ type Vote struct {
 
 type Staff struct {
 	Id             uuid.UUID `json:"id"`
+	PatientID      uuid.UUID `json:"patient_id"`
 	Name           string    `json:"name"`
 	Role           string    `json:"role"`
 	Specialty      string    `json:"specialty"`

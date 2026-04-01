@@ -112,8 +112,7 @@ type InsertOrdersRequest struct {
 	TaskID    uuid.UUID  `json:"task_id"`
 	Name      string     `json:"name"`
 	Date      *time.Time `json:"date"`
-	Urgency   string     `json:"urgency"`
-	TimeFrame string     `json:"time_frame"`
+	Details   any        `json:"details,omitempty"`
 }
 
 // User update Request Model
