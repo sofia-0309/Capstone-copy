@@ -233,7 +233,8 @@ func (h *OrdersHandler) GetOrdersFeedback(w http.ResponseWriter, r *http.Request
 
 	flaskURL := os.Getenv("FLASK_EXPLAIN_URL")
 	if flaskURL == "" {
-		flaskURL = "http://127.0.0.1:5001/api/explain-request"
+		//flaskURL = "http://127.0.0.1:5001/api/explain-request"
+		flaskURL ="https://llm-flask-production.up.railway.app/explain-request "
 	}
 
 	resp, err := http.Post(flaskURL, "application/json", bytes.NewBuffer(requestBody))
