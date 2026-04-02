@@ -236,7 +236,7 @@ func (h *OrdersHandler) GetOrdersFeedback(w http.ResponseWriter, r *http.Request
 		//flaskURL = "http://127.0.0.1:5001/api/explain-request"
 		flaskURL ="https://llm-flask-production.up.railway.app/explain-request"
 	}
-	flaskURL ="https://llm-flask-production.up.railway.app/explain-request"
+	flaskURL ="https://llm-flask-production.up.railway.app/api/explain-request"
 
 	resp, err := http.Post(flaskURL, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
